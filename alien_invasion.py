@@ -8,6 +8,7 @@ from game_stat import GameStat
 from ship import Ship
 from bullet import Bullet
 from alien import Alien
+from button import Button
 
 
 class AlienInvasion:
@@ -39,6 +40,8 @@ class AlienInvasion:
 
         self._create_fleet()
 
+        self.play_button = Button(self, 'Play')
+
 
     def run_game(self):
         while True:
@@ -47,7 +50,7 @@ class AlienInvasion:
                 self.ship.update()
                 self._update_bullets() # Обновление позиции + проверка 
                 self._update_aliens()
-                self._update_screen()
+            self._update_screen()
 
 
     def _check_events(self):
@@ -60,6 +63,26 @@ class AlienInvasion:
                 self._check_keydown_events(event)
             elif event.type == pg.KEYUP:
                 self._check_keyup_events(event)
+            elif event.type == pg.MOUSEBUTTONDOWN:
+                mouse_pos = pg.mouse.get_pos()
+                self._check_play_button(mouse_pos)
+
+
+    def _check_play_button(self, mouse_pos):
+        button_clicked = self.play_button.rect.collidepoint(mouse_pos)
+        if button_clicked and not self.stats.game_active:
+            self.settings.initialize_dinamic_settings()
+            
+            self.stats.reset_stats()
+            self.stats.game_active = True
+
+            self.aliens.empty()
+            self.bullets.empty()
+
+            self._create_fleet()
+            self.ship.center_ship()
+
+            pg.mouse.set_visible(False)
 
 
     def _check_keydown_events(self, event):
@@ -100,7 +123,9 @@ class AlienInvasion:
 
         if not self.aliens:
             self.bullets.empty()
+            self.settings.fleet_direction = 1
             self._create_fleet()
+            self.settings.increase_speed()
 
 
     def _update_aliens(self):
@@ -143,10 +168,11 @@ class AlienInvasion:
 
 
     def _ship_hit(self):
-        if self.stats.ships_left > 0:
+        if self.stats.ships_left > 1:
             self.stats.ships_left -= 1
         else:
             self.stats.game_active = False
+            pg.mouse.set_visible(True)
 
         self.aliens.empty()
         self.bullets.empty()
@@ -174,6 +200,8 @@ class AlienInvasion:
 
         self.aliens.draw(self.screen)
 
+        if not self.stats.game_active:
+            self.play_button.draw_button()
 
         pg.display.flip()
 
