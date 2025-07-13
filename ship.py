@@ -1,7 +1,7 @@
 import pygame as pg
 
 
-class Ship:
+class Ship():
     """Класс для управление кораблем"""
     def __init__(self, ai_game):
         self.screen = ai_game.screen # Перенимаем аттрибут screen с основного класса игры, где уже создано окно

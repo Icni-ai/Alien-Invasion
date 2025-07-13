@@ -9,6 +9,9 @@ from ship import Ship
 from bullet import Bullet
 from alien import Alien
 from button import Button
+from mode import Mode
+from scoreboard import Scoreboard
+from sounds import Sounds
 
 
 class AlienInvasion:
@@ -21,6 +24,8 @@ class AlienInvasion:
 
         self.settings.screen_width = self.screen.get_rect().width
         self.settings.screen_height = self.screen.get_rect().height
+
+        self.sounds = Sounds()
 
         self.stats = GameStat(self)
 
@@ -37,6 +42,10 @@ class AlienInvasion:
         self.bullets = pg.sprite.Group() # Создаем группу снарядов
 
         self.aliens = pg.sprite.Group()
+
+        self.mode_buttons = Mode(self)
+
+        self.sb = Scoreboard(self)
 
         self._create_fleet()
 
@@ -65,16 +74,21 @@ class AlienInvasion:
                 self._check_keyup_events(event)
             elif event.type == pg.MOUSEBUTTONDOWN:
                 mouse_pos = pg.mouse.get_pos()
-                self._check_play_button(mouse_pos)
-
+                if not self.stats.chose_mode_showed:
+                    self._check_play_button(mouse_pos)
+                elif self.stats.chose_mode_showed and not self.stats.game_active:
+                    self._select_mode_button(mouse_pos)
 
     def _check_play_button(self, mouse_pos):
         button_clicked = self.play_button.rect.collidepoint(mouse_pos)
-        if button_clicked and not self.stats.game_active:
+        if button_clicked and not self.stats.chose_mode_showed:
             self.settings.initialize_dinamic_settings()
             
             self.stats.reset_stats()
-            self.stats.game_active = True
+            self.stats.chose_mode_showed = True
+            self.sb.prep_score()
+            self.sb.prep_wave()
+            self.sb.prep_hearts()
 
             self.aliens.empty()
             self.bullets.empty()
@@ -82,7 +96,24 @@ class AlienInvasion:
             self._create_fleet()
             self.ship.center_ship()
 
+    
+    def _select_mode_button(self, mouse_pos):
+        easy_button_clicked = self.mode_buttons.easy_button.collidepoint(mouse_pos)
+        normal_button_clicked = self.mode_buttons.normal_button.collidepoint(mouse_pos)
+        hard_button_clicked = self.mode_buttons.hard_button.collidepoint(mouse_pos)
+        if easy_button_clicked:
+            self.stats.game_active = True
+        if normal_button_clicked:
+            self.settings.alien_speed = self.settings.alien_normalmode_speed
+            self.stats.game_active = True
+            self.settings.alien_points = 60
+        if hard_button_clicked:
+            self.settings.alien_speed = self.settings.alien_hardmode_speed
+            self.stats.game_active = True
+            self.settings.alien_points = 70
+        if self.stats.game_active:
             pg.mouse.set_visible(False)
+            self.sounds.bg_sound.play(-1)
 
 
     def _check_keydown_events(self, event):
@@ -108,6 +139,7 @@ class AlienInvasion:
         if len(self.bullets) < self.settings.bullets_allowed: 
             new_bullet = Bullet(self)
             self.bullets.add(new_bullet)
+            self.sounds.shoot_sound.play()
 
     def _update_bullets(self):
         self.bullets.update()
@@ -118,14 +150,27 @@ class AlienInvasion:
 
         self._check_bullet_alien_collisions()
 
+
     def _check_bullet_alien_collisions(self):
         collisions = pg.sprite.groupcollide(self.bullets, self.aliens, True, True)
+
+        if collisions:
+            self.sounds.collide_sound.play()
+            for aliens in collisions.values():
+                self.stats.score += self.settings.alien_points * len(aliens)
+            self.sb.prep_score()
+            self.sb.check_high_score()
 
         if not self.aliens:
             self.bullets.empty()
             self.settings.fleet_direction = 1
             self._create_fleet()
             self.settings.increase_speed()
+
+            self.stats.wave += 1
+            self.sb.prep_wave()
+
+            self.sounds.wave_sound.play()
 
 
     def _update_aliens(self):
@@ -170,9 +215,14 @@ class AlienInvasion:
     def _ship_hit(self):
         if self.stats.ships_left > 1:
             self.stats.ships_left -= 1
+            self.sb.prep_hearts()
+            self.sounds.ship_hit_sound.play()
         else:
             self.stats.game_active = False
+            self.stats.chose_mode_showed = False
             pg.mouse.set_visible(True)
+            self.sounds.bg_sound.stop()
+            self.sounds.game_over_sound.play()
 
         self.aliens.empty()
         self.bullets.empty()
@@ -200,8 +250,14 @@ class AlienInvasion:
 
         self.aliens.draw(self.screen)
 
-        if not self.stats.game_active:
+        if self.stats.game_active:
+            self.sb.show_score()
+
+        if not self.stats.chose_mode_showed:
             self.play_button.draw_button()
+        
+        if self.stats.chose_mode_showed and not self.stats.game_active:
+            self.mode_buttons.draw_all_buttons()
 
         pg.display.flip()
 
